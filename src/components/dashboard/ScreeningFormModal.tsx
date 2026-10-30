@@ -83,6 +83,8 @@ export const ScreeningFormModal: React.FC<ScreeningFormModalProps> = ({
   const [consentObtained, setConsentObtained] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccessNotice, setSaveSuccessNotice] = useState<string | null>(null);
 
   // Auto-fill existing chronic history if patient has it
   useEffect(() => {
@@ -189,7 +191,11 @@ export const ScreeningFormModal: React.FC<ScreeningFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     setIsSubmitting(true);
+    setSaveError(null);
+    setSaveSuccessNotice(null);
 
     try {
       const screeningId = `SCR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -239,16 +245,23 @@ export const ScreeningFormModal: React.FC<ScreeningFormModalProps> = ({
       await storage.saveScreening(newScreening, user.role, user.name);
       await refreshData();
 
-      if (onScreeningSaved) {
-        onScreeningSaved(newScreening, patient);
-      }
+      const isCloud = storage.getSupabaseConfig().isConnected;
+      const notice = isCloud
+        ? 'Screening record successfully saved & synced to Supabase database.'
+        : 'Screening record saved to local demo storage (Supabase not configured).';
+      setSaveSuccessNotice(notice);
 
-      // Automatically launch printable report modal preview
-      setPrintableReport({ screening: newScreening, patient });
-      onClose();
-    } catch (err) {
+      setTimeout(() => {
+        if (onScreeningSaved) {
+          onScreeningSaved(newScreening, patient);
+        }
+        // Automatically launch printable report modal preview
+        setPrintableReport({ screening: newScreening, patient });
+        onClose();
+      }, 700);
+    } catch (err: any) {
       console.error('Failed to save screening:', err);
-    } finally {
+      setSaveError(err.message || 'Failed to save screening. Please check inputs and retry.');
       setIsSubmitting(false);
     }
   };
@@ -289,6 +302,20 @@ export const ScreeningFormModal: React.FC<ScreeningFormModalProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-slate-700 dark:text-slate-300">
+          
+          {saveSuccessNotice && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5 font-semibold animate-pulse">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <span>{saveSuccessNotice}</span>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 flex items-start gap-2.5 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{saveError}</span>
+            </div>
+          )}
           
           {/* INFORMED CONSENT VERIFICATION STRIP */}
           <div className="p-3.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800/80 flex items-start gap-2.5">

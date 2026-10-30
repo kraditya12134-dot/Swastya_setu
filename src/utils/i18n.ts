@@ -14,7 +14,7 @@ export const translations = {
     navDisclaimer: 'Medical Disclaimer',
     launchApp: 'Launch Platform',
     backToHome: 'Back to Overview',
-    googleSignIn: 'Google Sign-In',
+    googleSignIn: 'Sign in with Google',
 
     // Roles
     roleCHW: 'Community Health Worker',

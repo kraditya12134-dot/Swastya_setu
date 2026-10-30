@@ -8,6 +8,8 @@ export type Language = 'en' | 'hi';
 
 export type Theme = 'light' | 'dark';
 
+export type AccountStatus = 'approved' | 'pending' | 'rejected';
+
 export interface User {
   id: string;
   name: string;
@@ -22,6 +24,30 @@ export interface User {
   avatarUrl?: string;
   preferredLanguage?: Language;
   isGoogleAuthenticated?: boolean;
+  status?: AccountStatus;
+  location?: string;
+  qualification?: string;
+  organization?: string;
+}
+
+export interface RegisteredUserRecord {
+  id: string;
+  email: string;
+  password?: string;
+  name: string;
+  nameHi?: string;
+  role: UserRole;
+  designation: string;
+  designationHi?: string;
+  phone: string;
+  centerName: string;
+  centerNameHi?: string;
+  location?: string;
+  qualification?: string;
+  organization?: string;
+  inviteCode?: string;
+  status: AccountStatus;
+  createdAt?: string;
 }
 
 export type RiskLevel = 'low' | 'moderate' | 'high';

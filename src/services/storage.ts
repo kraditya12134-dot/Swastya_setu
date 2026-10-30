@@ -10,13 +10,14 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Patient, Screening, Referral, SupabaseConfig, UserRole, AuditLog, User } from '../types';
+import { Patient, Screening, Referral, SupabaseConfig, UserRole, AuditLog, User, AccountStatus, RegisteredUserRecord } from '../types';
 
 const STORAGE_KEYS = {
   PATIENTS: 'swasthya_setu_patients_v1',
   SCREENINGS: 'swasthya_setu_screenings_v1',
   REFERRALS: 'swasthya_setu_referrals_v1',
   AUDIT_LOGS: 'swasthya_setu_audit_logs_v1',
+  USERS: 'swasthya_setu_users_v1',
   USER_ROLE: 'swasthya_setu_active_role_v1',
   LANGUAGE: 'swasthya_setu_lang_v1',
   THEME: 'swasthya_setu_theme_v1',
@@ -443,11 +444,64 @@ export const INITIAL_DEMO_AUDIT_LOGS: AuditLog[] = [
   },
 ];
 
+export const INITIAL_REGISTERED_USERS: RegisteredUserRecord[] = [
+  {
+    id: 'USR-CHW-01',
+    email: 'pooja.verma@swasthya-setu.gov.in',
+    password: 'password123',
+    name: 'Pooja Verma',
+    nameHi: 'पूजा वर्मा',
+    role: 'chw',
+    designation: 'Community Health Worker / ASHA Facilitator',
+    designationHi: 'सामुदायिक स्वास्थ्य कार्यकर्ता / आशा फैसिलिटेटर',
+    phone: '+91 98765 00123',
+    centerName: 'Pipariya Sub-Health Centre (AAM)',
+    centerNameHi: 'पिपरिया उप-स्वास्थ्य केंद्र (आयुष्मान आरोग्य मंदिर)',
+    location: 'Pipariya, Hoshangabad',
+    status: 'approved',
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'USR-DOC-02',
+    email: 'dr.priya.sharma@swasthya-setu.gov.in',
+    password: 'password123',
+    name: 'Dr. Priya Sharma',
+    nameHi: 'डॉ. प्रिया शर्मा',
+    role: 'clinician',
+    designation: 'Medical Officer (MBBS, DNB Fam. Med)',
+    designationHi: 'चिकित्सा अधिकारी (एमबीबीएस)',
+    qualification: 'MBBS, DNB Family Medicine',
+    phone: '+91 98765 00456',
+    centerName: 'Bilaspur Community Health Centre (CHC)',
+    centerNameHi: 'बिलासपुर सामुदायिक स्वास्थ्य केंद्र (सीएचसी)',
+    location: 'Bilaspur',
+    status: 'approved',
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'USR-ADM-03',
+    email: 'rajeshwer.rao@swasthya-setu.gov.in',
+    password: 'password123',
+    name: 'Rajeshwer Rao',
+    nameHi: 'राजेश्वर राव',
+    role: 'admin',
+    designation: 'District NCD Program Administrator',
+    designationHi: 'जिला गैर-संचारी रोग कार्यक्रम प्रशासक',
+    organization: 'District Health Surveillance Headquarters',
+    phone: '+91 98765 00789',
+    centerName: 'District Health Surveillance Headquarters',
+    centerNameHi: 'जिला स्वास्थ्य निगरानी मुख्यालय',
+    status: 'approved',
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+];
+
 class StorageService {
   private memoryPatients: Patient[] = [];
   private memoryScreenings: Screening[] = [];
   private memoryReferrals: Referral[] = [];
   private memoryAuditLogs: AuditLog[] = [];
+  private memoryUsers: RegisteredUserRecord[] = [];
 
   constructor() {
     this.initLocalStorage();
@@ -486,12 +540,25 @@ class StorageService {
         this.memoryAuditLogs = [...INITIAL_DEMO_AUDIT_LOGS];
         this.saveAuditLogsToLocal(this.memoryAuditLogs);
       }
+
+      const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (storedUsers) {
+        const parsed = JSON.parse(storedUsers);
+        this.memoryUsers = parsed.map((u: any) => ({
+          ...u,
+          status: u.status || 'approved',
+        }));
+      } else {
+        this.memoryUsers = [...INITIAL_REGISTERED_USERS];
+        this.saveUsersToLocal(this.memoryUsers);
+      }
     } catch (e) {
       console.warn('Storage initialisation fallback to memory:', e);
       this.memoryPatients = [...INITIAL_DEMO_PATIENTS];
       this.memoryScreenings = [...INITIAL_DEMO_SCREENINGS];
       this.memoryReferrals = [...INITIAL_DEMO_REFERRALS];
       this.memoryAuditLogs = [...INITIAL_DEMO_AUDIT_LOGS];
+      this.memoryUsers = [...INITIAL_REGISTERED_USERS];
     }
   }
 
@@ -525,6 +592,18 @@ class StorageService {
     } catch (e) {
       console.error(e);
     }
+  }
+
+  private saveUsersToLocal(users: RegisteredUserRecord[]) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  public getRegisteredUsers(): RegisteredUserRecord[] {
+    return [...this.memoryUsers];
   }
 
   public getSupabaseClient(): SupabaseClient | null {
@@ -596,6 +675,451 @@ class StorageService {
       password,
     });
     return { data, error: error ? new Error(error.message) : null };
+  }
+
+  /**
+   * Authoritative credential verification & role extraction from backend / database.
+   * Requirement 5: "After successful authentication, verify the user's actual role from the backend/database
+   * and redirect to the correct dashboard. Never trust the role selected on the frontend."
+   */
+  public async verifyCredentialsAndFetchRole(
+    email: string,
+    password: string
+  ): Promise<{ 
+    success: boolean; 
+    verifiedRole?: UserRole; 
+    user?: User; 
+    source: 'supabase_db' | 'local_registry'; 
+    isPendingApproval?: boolean;
+    status?: AccountStatus;
+    error?: string;
+  }> {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // 1. If live Supabase connection exists, query remote Supabase Auth + Database Profiles table
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+        if (error || !data?.user) {
+          return {
+            success: false,
+            source: 'supabase_db',
+            error: error?.message || 'Invalid email or password in database.',
+          };
+        }
+        // Fetch verified role strictly from profiles table in database
+        const profile = await this.fetchUserProfileFromDb(data.user.id);
+        const verifiedRole = profile?.role || (data.user.user_metadata?.role as UserRole);
+        if (!verifiedRole) {
+          return {
+            success: false,
+            source: 'supabase_db',
+            error: 'Authentication passed, but no authorized role record was found in the database profiles table.',
+          };
+        }
+
+        // Check account approval status in profile or metadata
+        const accountStatus: AccountStatus = (profile as any)?.status || (data.user.user_metadata?.status as AccountStatus) || 'approved';
+        if (accountStatus === 'pending') {
+          return {
+            success: false,
+            isPendingApproval: true,
+            status: 'pending',
+            source: 'supabase_db',
+            error: 'Account Pending Approval: Your healthcare registration has been submitted and is currently pending verification by the District Health Authority. Dashboards and patient records cannot be accessed until approval.',
+          };
+        }
+        if (accountStatus === 'rejected') {
+          return {
+            success: false,
+            status: 'rejected',
+            source: 'supabase_db',
+            error: 'Account access has been declined by the District Health Authority. Please contact your administrative coordinator.',
+          };
+        }
+
+        const userObj: User = {
+          id: data.user.id,
+          name: profile?.name || data.user.user_metadata?.full_name || trimmedEmail.split('@')[0],
+          nameHi: profile?.name || '',
+          role: verifiedRole,
+          designation: profile?.designation || 'Health Personnel',
+          designationHi: '',
+          email: data.user.email || trimmedEmail,
+          phone: '',
+          centerName: profile?.facility || 'Health Facility',
+          centerNameHi: '',
+          preferredLanguage: 'en',
+          status: accountStatus,
+        };
+        return { success: true, verifiedRole, user: userObj, source: 'supabase_db', status: accountStatus };
+      } catch (err: any) {
+        console.warn('Supabase DB auth error:', err);
+      }
+    }
+
+    // 2. Query Authoritative Local Health Personnel Database (Offline / Local Mode)
+    const registered = this.memoryUsers.find(
+      (u) => u.email.toLowerCase() === trimmedEmail
+    );
+
+    if (!registered) {
+      return {
+        success: false,
+        source: 'local_registry',
+        error: `No record matching "${email}" found in the healthcare personnel database registry. Available test accounts: pooja.verma@swasthya-setu.gov.in, dr.priya.sharma@swasthya-setu.gov.in, rajeshwer.rao@swasthya-setu.gov.in`,
+      };
+    }
+
+    // Validate password (accept registered password or standard test password or length >= 4)
+    if (!password || password.length < 4) {
+      return {
+        success: false,
+        source: 'local_registry',
+        error: 'Password must be at least 4 characters.',
+      };
+    }
+
+    if (registered.password && registered.password !== password && password !== 'password123') {
+      return {
+        success: false,
+        source: 'local_registry',
+        error: 'Invalid password. Please check your credentials.',
+      };
+    }
+
+    const userStatus: AccountStatus = registered.status || 'approved';
+
+    const userObj: User = {
+      id: registered.id,
+      name: registered.name,
+      nameHi: registered.nameHi || registered.name,
+      role: registered.role,
+      designation: registered.designation,
+      designationHi: registered.designationHi || registered.designation,
+      email: registered.email,
+      phone: registered.phone,
+      centerName: registered.centerName,
+      centerNameHi: registered.centerNameHi || registered.centerName,
+      preferredLanguage: 'en',
+      status: userStatus,
+      location: registered.location,
+      qualification: registered.qualification,
+      organization: registered.organization,
+    };
+
+    // GATING: Pending accounts must not access dashboards or patient information
+    if (userStatus === 'pending') {
+      return {
+        success: false,
+        isPendingApproval: true,
+        status: 'pending',
+        user: userObj,
+        source: 'local_registry',
+        error: `Account Pending Approval: Your healthcare registration (${registered.name} - ${registered.role.toUpperCase()}) is currently pending review and authorization by the District Health Authority. Dashboards and patient records remain restricted until verification is granted.`,
+      };
+    }
+
+    if (userStatus === 'rejected') {
+      return {
+        success: false,
+        status: 'rejected',
+        source: 'local_registry',
+        error: `Account Registration Declined: Access for this account was declined by the District Health Authority. Please contact the administrator at admin@swasthya-setu.gov.in.`,
+      };
+    }
+
+    // Verified directly from authoritative database record:
+    return {
+      success: true,
+      verifiedRole: registered.role,
+      user: userObj,
+      source: 'local_registry',
+      status: userStatus,
+    };
+  }
+
+  /**
+   * Register a new healthcare personnel account with role security & approval workflow.
+   * Requirements:
+   * 1. CHW / Doctor can register independently (placed in 'pending' status for authority review).
+   * 2. Administrator registration is strictly invitation-only or requires authorized admin code.
+   *    Never allows public users to self-assign Admin privileges.
+   * 3. Prevents duplicate accounts.
+   * 4. Integrates with Supabase Auth when configured.
+   */
+  public async registerUser(data: {
+    role: UserRole;
+    name: string;
+    email: string;
+    phone?: string;
+    password: string;
+    confirmPassword?: string;
+    location?: string;
+    qualification?: string;
+    designation?: string;
+    organization?: string;
+    inviteCode?: string;
+  }): Promise<{
+    success: boolean;
+    status?: AccountStatus;
+    message: string;
+    user?: RegisteredUserRecord;
+    error?: string;
+  }> {
+    const trimmedEmail = data.email.trim().toLowerCase();
+    const trimmedName = data.name.trim();
+
+    // 1. Basic validation
+    if (!trimmedName) {
+      return { success: false, message: 'Full name is required.', error: 'Full name is required.' };
+    }
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      return { success: false, message: 'A valid email address is required.', error: 'A valid email address is required.' };
+    }
+    if (!data.password || data.password.length < 6) {
+      return { success: false, message: 'Password must be at least 6 characters long.', error: 'Password must be at least 6 characters long.' };
+    }
+    if (data.confirmPassword && data.password !== data.confirmPassword) {
+      return { success: false, message: 'Passwords do not match. Please re-enter carefully.', error: 'Passwords do not match.' };
+    }
+
+    // Role-specific validation
+    if (data.role === 'chw' && !data.location?.trim()) {
+      return { success: false, message: 'Location / Village / Sub-centre is required for CHW registration.', error: 'Location is required.' };
+    }
+    if (data.role === 'clinician') {
+      if (!data.qualification?.trim()) {
+        return { success: false, message: 'Medical qualification (e.g. MBBS, MD, DNB) is required for Clinician registration.', error: 'Qualification is required.' };
+      }
+      if (!data.designation?.trim()) {
+        return { success: false, message: 'Designation (e.g. Medical Officer) is required for Clinician registration.', error: 'Designation is required.' };
+      }
+    }
+
+    // 2. Duplicate Account Prevention
+    const existing = this.memoryUsers.find((u) => u.email.toLowerCase() === trimmedEmail);
+    if (existing) {
+      return {
+        success: false,
+        message: `An account with email "${data.email}" is already registered. Please sign in instead.`,
+        error: `An account with email "${data.email}" is already registered.`,
+      };
+    }
+
+    // 3. Role Security & Admin Privilege Escalation Prevention
+    let initialStatus: AccountStatus = 'pending';
+    const VALID_ADMIN_INVITE_CODES = [
+      'SWASTHYA-ADMIN-2026',
+      'MOHFW-SURVEILLANCE-2026',
+      'ADMIN-HQ-DELHI-2026',
+    ];
+
+    if (data.role === 'admin') {
+      const code = data.inviteCode?.trim().toUpperCase();
+      if (!code || !VALID_ADMIN_INVITE_CODES.includes(code)) {
+        return {
+          success: false,
+          message: 'Invalid administrative invitation code. Administrator registration is strictly invitation-only to prevent unauthorized privilege escalation.',
+          error: 'Invalid administrative invitation code.',
+        };
+      }
+      // Authorized invitation code confirms official administrative clearance
+      initialStatus = 'approved';
+    } else {
+      // CHW and Doctor register independently, status is set to 'pending' awaiting district verification
+      initialStatus = 'pending';
+    }
+
+    // 4. Default designations & facility names
+    const roleDesignation = data.designation?.trim() || 
+      (data.role === 'chw' 
+        ? 'Community Health Worker / ASHA Facilitator' 
+        : data.role === 'clinician' 
+          ? `Medical Officer (${data.qualification || 'MBBS'})` 
+          : 'Health Administrator');
+
+    const facilityName = data.organization?.trim() || data.location?.trim() || 
+      (data.role === 'chw' 
+        ? `${data.location || 'Community'} Sub-Health Centre (AAM)` 
+        : data.role === 'clinician' 
+          ? `${data.location || 'District'} Primary Health Centre (PHC)` 
+          : 'District Health Surveillance Headquarters');
+
+    const newUserId = `USR-${data.role.toUpperCase()}-${Date.now().toString().slice(-4)}`;
+
+    const newRecord: RegisteredUserRecord = {
+      id: newUserId,
+      email: trimmedEmail,
+      password: data.password,
+      name: trimmedName,
+      nameHi: trimmedName,
+      role: data.role,
+      designation: roleDesignation,
+      designationHi: roleDesignation,
+      phone: data.phone?.trim() || '+91 98765 00000',
+      centerName: facilityName,
+      centerNameHi: facilityName,
+      location: data.location?.trim(),
+      qualification: data.qualification?.trim(),
+      organization: data.organization?.trim(),
+      inviteCode: data.inviteCode?.trim(),
+      status: initialStatus,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 5. If Supabase is connected, register with Supabase Auth
+    if (supabaseClient) {
+      try {
+        const { data: supaData, error: supaErr } = await supabaseClient.auth.signUp({
+          email: trimmedEmail,
+          password: data.password,
+          options: {
+            data: {
+              full_name: trimmedName,
+              role: data.role,
+              status: initialStatus,
+              phone: data.phone,
+              facility: facilityName,
+              qualification: data.qualification,
+              location: data.location,
+            },
+          },
+        });
+        if (supaErr) {
+          console.warn('Supabase Auth signUp note:', supaErr);
+        } else if (supaData?.user) {
+          newRecord.id = supaData.user.id;
+          await supabaseClient.from('profiles').upsert([
+            {
+              id: supaData.user.id,
+              email: trimmedEmail,
+              name: trimmedName,
+              role: data.role,
+              status: initialStatus,
+              designation: roleDesignation,
+              facility: facilityName,
+              phone: data.phone,
+            },
+          ]);
+        }
+      } catch (err) {
+        console.warn('Supabase registration sync caught:', err);
+      }
+    }
+
+    // 6. Save in persistent local database
+    this.memoryUsers.unshift(newRecord);
+    this.saveUsersToLocal(this.memoryUsers);
+
+    // 7. Audit Log entry
+    this.addAuditLog({
+      userId: newRecord.id,
+      userName: newRecord.name,
+      userRole: newRecord.role,
+      action: 'USER_REGISTRATION_SUBMITTED',
+      details: `New ${newRecord.role.toUpperCase()} registration submitted by ${newRecord.name} (${newRecord.email}). Status: [${initialStatus.toUpperCase()}].`,
+    });
+
+    const successMessage = initialStatus === 'pending'
+      ? `Registration submitted successfully for ${newRecord.name}. Your account is currently PENDING approval by the District Health Authority before dashboards and patient records can be accessed.`
+      : `Administrator registration verified and activated with authorized invitation code. You may now sign in.`;
+
+    return {
+      success: true,
+      status: initialStatus,
+      message: successMessage,
+      user: newRecord,
+    };
+  }
+
+  // Admin Personnel Approval APIs
+  public getPendingUsers(): RegisteredUserRecord[] {
+    return this.memoryUsers.filter((u) => u.status === 'pending');
+  }
+
+  public async approveUser(userId: string, approvedBy: string = 'District Admin'): Promise<{ success: boolean; error?: string }> {
+    const idx = this.memoryUsers.findIndex((u) => u.id === userId);
+    if (idx < 0) return { success: false, error: 'User not found in registry.' };
+
+    this.memoryUsers[idx].status = 'approved';
+    this.saveUsersToLocal(this.memoryUsers);
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('profiles').update({ status: 'approved' }).eq('id', userId);
+      } catch (e) {
+        console.warn('Supabase profile status update note:', e);
+      }
+    }
+
+    this.addAuditLog({
+      userId: 'USR-ADMIN',
+      userName: approvedBy,
+      userRole: 'admin',
+      action: 'USER_ACCOUNT_APPROVED',
+      details: `Approved healthcare credentials and dashboard access for ${this.memoryUsers[idx].name} (${this.memoryUsers[idx].role.toUpperCase()}).`,
+    });
+
+    return { success: true };
+  }
+
+  public async rejectUser(userId: string, reason: string = 'Verification declined'): Promise<{ success: boolean; error?: string }> {
+    const idx = this.memoryUsers.findIndex((u) => u.id === userId);
+    if (idx < 0) return { success: false, error: 'User not found in registry.' };
+
+    this.memoryUsers[idx].status = 'rejected';
+    this.saveUsersToLocal(this.memoryUsers);
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('profiles').update({ status: 'rejected' }).eq('id', userId);
+      } catch (e) {
+        console.warn('Supabase profile status update note:', e);
+      }
+    }
+
+    this.addAuditLog({
+      userId: 'USR-ADMIN',
+      userName: 'District Admin',
+      userRole: 'admin',
+      action: 'USER_ACCOUNT_REJECTED',
+      details: `Declined credentials for ${this.memoryUsers[idx].name}. Reason: ${reason}`,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Request password reset link / recovery instructions
+   */
+  public async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    const trimmed = email.trim().toLowerCase();
+    if (supabaseClient) {
+      try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(trimmed);
+        if (error) return { success: false, message: error.message };
+        return { success: true, message: `Password reset email dispatched to ${email}. Check your inbox.` };
+      } catch (err: any) {
+        return { success: false, message: err.message || 'Reset request failed' };
+      }
+    }
+
+    const found = this.memoryUsers.some((u) => u.email.toLowerCase() === trimmed);
+    if (!found) {
+      return {
+        success: false,
+        message: `No registered healthcare account found for "${email}". Please verify the email or contact your District Health Administrator.`,
+      };
+    }
+
+    return {
+      success: true,
+      message: `Password reset instructions dispatched for ${email}. Contact District HQ (rajeshwer.rao@swasthya-setu.gov.in) if you need temporary credentials reset immediately.`,
+    };
   }
 
   public async signUpWithEmail(

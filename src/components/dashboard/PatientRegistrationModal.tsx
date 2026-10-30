@@ -111,6 +111,7 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
   // Review step & options
   const [startImmediately, setStartImmediately] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveSuccessNotice, setSaveSuccessNotice] = useState<string | null>(null);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -218,6 +219,8 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!consentObtained) {
       setGlobalError('Patient informed consent must be recorded before registry submission.');
       return;
@@ -225,6 +228,7 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
 
     setIsSubmitting(true);
     setGlobalError(null);
+    setSaveSuccessNotice(null);
 
     try {
       const generatedId = `PAT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -266,14 +270,20 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
       await storage.savePatient(newPatient, user.role, user.name);
       await refreshData();
 
-      if (onRegistered) {
-        onRegistered(newPatient, startImmediately);
-      }
+      const isCloud = storage.getSupabaseConfig().isConnected;
+      const notice = isCloud
+        ? 'Patient record successfully saved and synced to Supabase.'
+        : 'Patient record successfully saved to local demo storage (Supabase not configured).';
+      setSaveSuccessNotice(notice);
 
-      onClose();
+      setTimeout(() => {
+        if (onRegistered) {
+          onRegistered(newPatient, startImmediately);
+        }
+        onClose();
+      }, 700);
     } catch (err: any) {
       setGlobalError(err.message || 'Failed to complete patient registration. Please check fields.');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -367,6 +377,13 @@ export const PatientRegistrationModal: React.FC<PatientRegistrationModalProps> =
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto p-6 text-xs text-slate-700 dark:text-slate-300 space-y-5">
           
+          {saveSuccessNotice && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5 font-semibold animate-pulse">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <span>{saveSuccessNotice}</span>
+            </div>
+          )}
+
           {globalError && (
             <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />

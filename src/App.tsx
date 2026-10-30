@@ -23,6 +23,7 @@ import { GoogleAuthModal } from './components/common/GoogleAuthModal';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 import { RoleLoginPage, RoleLoginRoute } from './components/auth/RoleLoginPage';
+import { RoleRegisterPage, RoleRegisterRoute } from './components/auth/RoleRegisterPage';
 
 const AccessDeniedView: React.FC = () => {
   const { role, setDashboardTab } = useApp();
@@ -96,13 +97,32 @@ const AppContent: React.FC = () => {
     return null;
   };
 
+  // Determine if active route is a role-specific registration route
+  const getRoleRegisterRoute = (path: string): RoleRegisterRoute | null => {
+    if (path.startsWith('/register/admin')) return 'admin';
+    if (path.startsWith('/register/chw')) return 'chw';
+    if (path.startsWith('/register/doctor')) return 'doctor';
+    return null;
+  };
+
   const roleLoginRoute = getRoleLoginRoute(currentPath);
+  const roleRegisterRoute = getRoleRegisterRoute(currentPath);
 
   // If on a dedicated role login page
   if (roleLoginRoute) {
     return (
       <RoleLoginPage 
         route={roleLoginRoute} 
+        onNavigate={(p) => navigateTo(p)} 
+      />
+    );
+  }
+
+  // If on a dedicated role registration page
+  if (roleRegisterRoute) {
+    return (
+      <RoleRegisterPage 
+        route={roleRegisterRoute} 
         onNavigate={(p) => navigateTo(p)} 
       />
     );

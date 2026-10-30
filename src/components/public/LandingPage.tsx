@@ -32,9 +32,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
   const { language, setView, setRole, role, setDashboardTab, setIsAuthModalOpen } = useApp();
   const t = translations[language];
 
-  const handleLaunchRole = (targetRole: UserRole) => {
-    setRole(targetRole);
-    setView('dashboard');
+  const handleRoleNavigate = (route: 'admin' | 'chw' | 'doctor') => {
+    if (onNavigateToRoleLogin) {
+      onNavigateToRoleLogin(route);
+    } else {
+      window.history.pushState({}, '', `/login/${route}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   };
 
   return (
@@ -75,22 +79,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
                     : 'स्वास्थ्य सेतु आशा कार्यकर्ताओं और प्राथमिक स्वास्थ्य केंद्र के चिकित्सकों को एक एकीकृत डिजिटल स्क्रीनिंग मंच प्रदान करता है — जिसमें गैर-आक्रामक स्वास्थ्य संकेतक, स्वचालित बीएमआई, मानकीकृत जोखिम वर्गीकरण और सुगम रेफरल प्रणाली शामिल है।'}
                 </p>
 
-                {/* Role-based Direct Launch Buttons */}
+                {/* Role-based Login Selection */}
                 <div className="pt-2 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-                      {language === 'en' ? 'Launch demo workspace by role:' : 'भूमिका अनुसार डेमो पोर्टल खोलें:'}
+                  <div>
+                    <span className="text-xs uppercase tracking-wider text-teal-400 font-bold">
+                      {language === 'en' ? 'Select your healthcare role to sign in:' : 'लॉगिन हेतु अपनी भूमिका चुनें:'}
                     </span>
-                    {onNavigateToRoleLogin && (
-                      <span className="text-[11px] text-teal-400 font-medium hidden sm:inline">
-                        Dedicated login routes: /login/chw · /login/doctor · /login/admin
-                      </span>
-                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
-                      onClick={() => handleLaunchRole('chw')}
+                      type="button"
+                      onClick={() => handleRoleNavigate('chw')}
                       className="px-4 py-2.5 rounded-xl bg-teal-500 text-slate-950 hover:bg-teal-400 font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-teal-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                      title="CHW / ASHA Worker Login"
                     >
                       <Users className="w-4 h-4" />
                       <span>{language === 'en' ? 'CHW / ASHA Worker' : 'स्वास्थ्य कार्यकर्ता (CHW)'}</span>
@@ -98,8 +99,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
                     </button>
 
                     <button
-                      onClick={() => handleLaunchRole('clinician')}
+                      type="button"
+                      onClick={() => handleRoleNavigate('doctor')}
                       className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-700/80 hover:border-teal-500/50 font-semibold text-xs sm:text-sm flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                      title="Clinician / Doctor Login"
                     >
                       <Stethoscope className="w-4 h-4 text-teal-400" />
                       <span>{language === 'en' ? 'Clinician / Doctor' : 'चिकित्सक / डॉक्टर'}</span>
@@ -107,39 +110,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
                     </button>
 
                     <button
-                      onClick={() => handleLaunchRole('admin')}
+                      type="button"
+                      onClick={() => handleRoleNavigate('admin')}
                       className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-700/80 hover:border-teal-500/50 font-semibold text-xs sm:text-sm flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                      title="Health Administrator Login"
                     >
                       <Building2 className="w-4 h-4 text-emerald-400" />
                       <span>{language === 'en' ? 'Health Administrator' : 'प्रशासक'}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                     </button>
                   </div>
-
-                  {/* Dedicated Role Login Routes Navigation */}
-                  {onNavigateToRoleLogin && (
-                    <div className="pt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      <span>{language === 'en' ? 'Or open role login page:' : 'या समर्पित लॉगिन पृष्ठ खोलें:'}</span>
-                      <button
-                        onClick={() => onNavigateToRoleLogin('chw')}
-                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-teal-500/50 text-teal-400 hover:text-teal-300 font-mono text-[11px] cursor-pointer transition-colors"
-                      >
-                        /login/chw
-                      </button>
-                      <button
-                        onClick={() => onNavigateToRoleLogin('doctor')}
-                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 font-mono text-[11px] cursor-pointer transition-colors"
-                      >
-                        /login/doctor
-                      </button>
-                      <button
-                        onClick={() => onNavigateToRoleLogin('admin')}
-                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 font-mono text-[11px] cursor-pointer transition-colors"
-                      >
-                        /login/admin
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 {/* Key Trust Signals & Non-Diagnostic Badge */}
@@ -379,8 +359,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
                   ? 'We never pretend data is cloud-persisted when unconfigured. Works immediately offline via local browser storage, and seamlessly connects to your Supabase PostgreSQL backend when credentials are provided in .env.'
                   : 'यदि बैकएंड कनेक्ट नहीं है, तो सिस्टम कभी झूठा दावा नहीं करता। यह स्थानीय स्टोरेज में काम करता है और .env में Supabase क्रेडेंशियल मिलने पर तुरंत क्लाउड से जुड़ जाता है।'}
               </p>
-              <div className="pt-2 text-xs font-mono text-teal-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
-                <span>VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY</span>
+              <div className="pt-2 flex items-center gap-2 text-xs text-slate-300">
+                <span className="text-teal-400 font-semibold">✓</span>
+                <span>{language === 'en' ? 'Automatic offline local storage with cloud backend integration' : 'क्लाउड डेटाबेस एकीकरण के साथ सुरक्षित ऑफ़लाइन स्टोरेज'}</span>
               </div>
             </div>
 
@@ -484,7 +465,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateToRoleLogin 
                   onClick={() => setIsAuthModalOpen(true)}
                   className="px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer inline-flex items-center gap-2"
                 >
-                  <span>{language === 'en' ? 'Google Sign-In / Setup' : 'गूगल साइन-इन / सेटअप'}</span>
+                  <span>{language === 'en' ? 'Sign in with Google' : 'गूगल से साइन-इन'}</span>
                 </button>
               </div>
             </div>
