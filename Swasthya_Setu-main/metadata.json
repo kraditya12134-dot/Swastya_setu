@@ -1,0 +1,6 @@
+{
+  "name": "Swasthya Setu (स्वास्थ्य सेतु)",
+  "description": "Bridging Communities to Better Health — A frontline healthcare screening-support platform for Community Health Workers, Clinicians, and Admins.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
